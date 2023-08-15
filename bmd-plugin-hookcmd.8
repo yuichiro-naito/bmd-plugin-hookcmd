@@ -1,0 +1,37 @@
+.Dd Aug 15, 2023
+.Dt BMD-PLUGIN-HOOKCMD 8
+.Os
+.Sh NAME
+.Nm bmd-plugin-hookcmd
+.Nd Spawns command when VM state is changed.
+.Sh DESCRIPTION
+The
+.Nm
+spawns the specific command when VM's status is changed.
+.Ss Configuration
+This plugin expands VM configuration and add 'hookcmd' parameter to specify
+which command is spawned.
+.Bl -tag -width hookcmd
+.It Cm hookcmd = Ar command_path;
+File path to the spawn command.
+.El
+.Ss Command Argument
+The spawned command receives following arguments in following order.
+.Bl -tag -with "VM_state"
+.It Ar VM_name
+The name of VM.
+.It Ar VM_state
+The state of VM. One of these values.
+.Pp
+.Bl -tag -width TERMINATE -compact
+.It Cm LOAD
+The loader is invoked.
+.It Cm RUN
+VM start running.
+.It Cm TERMINATE
+VM is terminated.
+.El
+.El
+.Sh SEE ALSO
+.Xr bmd 8 ,
+.Xr bmd.conf 5
