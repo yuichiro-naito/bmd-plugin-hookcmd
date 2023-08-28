@@ -1,6 +1,6 @@
+#include <sys/stat.h>
 #include <sys/wait.h>
 
-#include <stddef.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
@@ -11,15 +11,17 @@
 static int
 hookcmd_parse_config(nvlist_t *config, const char *key, const char *val)
 {
+	struct stat sb;
+
 	if (strcasecmp(key, "hookcmd"))
 		return 1;
 
-	if (access(val, R_OK | X_OK) == 0) {
-		nvlist_add_string(config, "hookcmd", val);
-		return 0;
-	}
+	if (stat(val, &sb) < 0 ||
+	    (sb.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) == 0)
+		return -1;
 
-	return -1;
+	nvlist_add_string(config, "hookcmd", val);
+	return 0;
 }
 
 static int
@@ -32,6 +34,7 @@ static void
 hookcmd_status_change(struct vm *vm, nvlist_t *config)
 {
 	pid_t pid;
+	uid_t user;
 	struct vm_conf *conf = vm_get_conf(vm);
 	const char *cmd0;
 	char *cmd1, *cmd2, *args[4];
@@ -52,6 +55,8 @@ hookcmd_status_change(struct vm *vm, nvlist_t *config)
 	}
 
 	if (pid == 0) {
+		if ((user = get_owner(conf)) > 0)
+			setuid(user);
 		args[0] = cmd2;
 		args[1] = get_name(conf);
 		args[2] = state_name[get_state(vm)];
