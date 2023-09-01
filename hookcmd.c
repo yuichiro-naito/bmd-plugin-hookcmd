@@ -35,6 +35,7 @@ hookcmd_status_change(struct vm *vm, nvlist_t *config)
 {
 	pid_t pid;
 	uid_t user;
+	gid_t group;
 	struct vm_conf *conf = vm_get_conf(vm);
 	const char *cmd0;
 	char *cmd1, *cmd2, *args[4];
@@ -55,6 +56,8 @@ hookcmd_status_change(struct vm *vm, nvlist_t *config)
 	}
 
 	if (pid == 0) {
+		if ((group = get_group(conf)) != -1)
+			setgid(group);
 		if ((user = get_owner(conf)) > 0)
 			setuid(user);
 		args[0] = cmd2;
