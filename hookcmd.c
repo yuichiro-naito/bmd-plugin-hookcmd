@@ -76,5 +76,6 @@ PLUGIN_DESC plugin_desc = {
 	.finalize = NULL,
 	.on_status_change = hookcmd_status_change,
 	.parse_config = hookcmd_parse_config,
-	.method = NULL
+	.method = NULL,
+	.on_reload_config = NULL,
 };
