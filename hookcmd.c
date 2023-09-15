@@ -5,8 +5,11 @@
 #include <unistd.h>
 #include <string.h>
 #include <libgen.h>
+#include <pwd.h>
 
 #include <bmd_plugin.h>
+
+#define GID_NOBODY   65534
 
 static int
 hookcmd_parse_config(nvlist_t *config, const char *key, const char *val)
@@ -36,6 +39,7 @@ hookcmd_status_change(struct vm *vm, nvlist_t *config)
 	pid_t pid;
 	uid_t user;
 	gid_t group;
+	struct passwd *pwd;
 	struct vm_conf *conf = vm_get_conf(vm);
 	const char *cmd0;
 	char *cmd1, *cmd2, *args[4];
@@ -56,10 +60,13 @@ hookcmd_status_change(struct vm *vm, nvlist_t *config)
 	}
 
 	if (pid == 0) {
-		if ((group = get_group(conf)) != -1)
+		if ((user = get_owner(conf)) > 0) {
+			if ((group = get_group(conf)) == -1)
+				group = (pwd = getpwuid(user)) ?
+					pwd->pw_gid : GID_NOBODY;
 			setgid(group);
-		if ((user = get_owner(conf)) > 0)
 			setuid(user);
+		}
 		args[0] = cmd2;
 		args[1] = get_name(conf);
 		args[2] = state_name[get_state(vm)];
