@@ -1,3 +1,4 @@
+#include <sys/limits.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 
@@ -28,7 +29,7 @@ hookcmd_parse_config(nvlist_t *config, const char *key, const char *val)
 }
 
 static int
-on_process_exit(int id, void *data)
+on_process_exit(int id, void *data __unused)
 {
 	return waitpid(id, NULL, WNOHANG);
 }
@@ -41,40 +42,49 @@ hookcmd_status_change(struct vm *vm, nvlist_t *config)
 	gid_t group;
 	struct passwd *pwd;
 	struct vm_conf *conf = vm_get_conf(vm);
-	const char *cmd0;
-	char *cmd1, *cmd2, *args[4];
-	static char *state_name[] = { "TERMINATE", "LOAD", "RUN",
+	static const char * const state_name[] =
+		{ "TERMINATE", "LOAD", "RUN",
 		"STOP", "REMOVE", "RESTART" };
 
-	if (! nvlist_exists_string(config, "hookcmd"))
+	if (! nvlist_exists_string(config, "hookcmd") ||
+	    (pid = fork()) < 0)
 		return;
-
-	cmd0 = nvlist_get_string(config, "hookcmd");
-	if ((cmd1 = strdup(cmd0)) == NULL)
-		return;
-	cmd2 = basename(cmd1);
-
-	if ((pid = fork()) < 0) {
-		free(cmd1);
-		return;
-	}
 
 	if (pid == 0) {
+		const char *cmd0;
+		char *cmd1, *cmd2;
+		FILE *fp;
+		char  **args, *buf;
+		size_t len;
+
+		cmd0 = nvlist_get_string(config, "hookcmd");
+		if ((cmd1 = strdup(cmd0)) == NULL)
+			return;
+		cmd2 = basename(cmd1);
+
+		fp = open_memstream(&buf, &len);
+		if (fp == NULL)
+			exit(1);
+		fprintf(fp, "%s\n%s\n%s\n", cmd2, get_name(conf),
+			state_name[get_state(vm)]);
+
+		fclose(fp);
+
+		args = split_args(buf);
+		if (args == NULL)
+			exit(1);
+
 		if ((user = get_owner(conf)) > 0) {
-			if ((group = get_group(conf)) == -1)
+			if ((group = get_group(conf)) == UINT_MAX)
 				group = (pwd = getpwuid(user)) ?
 					pwd->pw_gid : GID_NOBODY;
 			setgid(group);
 			setuid(user);
 		}
-		args[0] = cmd2;
-		args[1] = get_name(conf);
-		args[2] = state_name[get_state(vm)];
-		args[3] = NULL;
+
 		execv(cmd0, args);
 		exit(1);
 	}
-	free(cmd1);
 
 	plugin_wait_for_process(pid, on_process_exit, NULL);
 }
