@@ -98,4 +98,7 @@ PLUGIN_DESC plugin_desc = {
 	.parse_config = hookcmd_parse_config,
 	.method = NULL,
 	.on_reload_config = NULL,
+	.loader_method = NULL,
+	.prestart = NULL,
+	.poststop = NULL,
 };
