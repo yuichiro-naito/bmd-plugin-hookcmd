@@ -7,15 +7,31 @@
 .Sh DESCRIPTION
 The
 .Nm
-spawns the specific command when VM's status is changed. The user/group ID of
-spawned command is as same as the owner/group of the VM.
+spawns the specific command when VM's status is changed.
 .Ss Configuration
-This plugin expands VM configuration and add 'hookcmd' parameter to specify
-which command is spawned.
+This plugin expands VM configuration and add the following parameters to
+specify which command is spawned/invoked.
 .Bl -tag -width hookcmd
 .It Cm hookcmd = Ar command_path;
-File path to the spawn command.
+File path to the spawn command. The user/group ID of spawned command is as same as the owner/group of the VM.
+.It Cm prestart = Ar command_path;
+File path to the prestart command. The prestart command is invoked before
+starting the VM and delays starting it until the prestart command terminates.
+.It Cm poststop = Ar command_path;
+File path to the prestart command. The poststop command is invoked after
+the VM stopped. Cleaning up the VM resources will delay until the poststop
+command terminates.
 .El
+
+The files of
+.Sq prestart
+and
+.Sq poststop
+must be owned by root. They are invoked as same uid/gid as the
+.Xr bmd 8
+(root/wheel) and intended to setup OS specific envrionments such as
+routing, firewall, etc.
+
 .Ss Command Argument
 The spawned command receives following arguments in following order.
 .Bl -tag -with "VM_state"
@@ -31,7 +47,161 @@ The loader is invoked.
 VM start running.
 .It Cm TERMINATE
 VM is terminated.
+.It Cm PRESTART
+Before starting the VM.
+.It Cm POSTSTOP
+After stopping the VM.
 .El
+.El
+.Sh ENVIRONMENT VARIABLES
+The VM configurations are exported to the following environment variables.
+.Bl -tag -width VM_NNETWORKS
+.It Cm VM_NAME
+Virtual machine name.
+.It Cm VM_ID
+Unique number for each individual VMs that starts from 0. Same as $ID in the
+predefined configuration variable.
+.It Cm VM_OWNER
+Uid number of the owner.
+.It Cm VM_GROUP
+Gid number of the group.
+.Sq -1
+if it is not set.
+.It Cm VM_NCPU
+Number of CPUs.
+.It Cm VM_NCPU_PINS
+Number of cpu_pin definitions.
+.It Cm VM_CPU_PIN${n}
+vcpu:hostcpu. Where ${n} starts from 1 to VM_NCPU_PINS.
+.It Cm VM_MEMORY
+Size of memory which is specified in memory value.
+.It Cm VM_WIRED_MEMORY
+.Sq true
+or
+.Sq false .
+.It Cm VM_UTCTIME
+.Sq true
+or
+.Sq false .
+.It Cm VM_REBOOT_ON_CHANGE
+.Sq true
+or
+.Sq false .
+.It Cm VM_SINGLE_USER
+.Sq true
+or
+.Sq false .
+.It Cm VM_INSTALL
+.Sq true
+or
+.Sq false .
+.It Cm VM_COMPORT
+Assigned com port device name.
+.It Cm VM_DEBUG_PORT
+Debug port number.
+.It Cm VM_BOOT
+Boot type.
+.It Cm VM_BOOT_DELAY
+Delay time in seconds.
+.It Cm VM_LOADER_TIMEOUT
+Loader timeout in seconds.
+.It Cm VM_STOP_TIMEOUT
+VM stop timeout in seconds.
+.It Cm VM_LOADER
+Type of loader.
+.It Cm VM_BHYVELOAD_LOADER
+Path to the OS loader.
+.It Cm VM_NBHYVELOAD_ENVS
+Number of
+.Sq bhyveload_env
+s.
+.It Cm VM_BHYVELOAD_ENV${n}
+Bhyveload environment variable. Where ${n} starts from 1 to VM_NBHYVELOAD_ENVS.
+.It Cm VM_NBHYVE_ENVS
+Number of
+.Sq bhyve_env
+s.
+.It Cm VM_BHYVE_ENV${n}
+Bhyve environment variable. Where ${n} starts from 1 to VM_NBHYVE_ENVS.
+.It Cm VM_LOADCMD
+Loadcmd value which is specified in the configuration file.
+This is not the value
+`bmdctl inspect` creates.
+.It Cm VM_INSTALLCMD
+Installcmd value which is specified in the configuration file.
+This is not the value `bmdctl inspect` creates.
+.It Cm VM_ERR_LOGFILE
+Err_logfile name.
+.It Cm VM_HOST_BRIDGE
+.Sq none
+or
+.Sq intel
+or
+.Sq amd .
+.It Cm VM_NPASSTHRUES
+Number of
+.Sq passthru
+s.
+.It Cm VM_PASSTHRU${n}
+Passthru device. Where ${n} starts from 1 to VM_NPASSTHRUES.
+.It Cm VM_TPM_DEV
+Tpm device name. This is set if specified.
+.It Cm VM_TPM_VERSION
+Tpm device version. This is set if specified.
+.It Cm VM_NDISKS
+Number of
+.Sq disk
+s.
+.It Cm VM_DISK${n}_TYPE
+Disk device type. Where ${n} starts from 1 to VM_NDISKS.
+.It Cm VM_DISK${n}_PATH
+Disk device path. Where ${n} starts from 1 to VM_NDISKS.
+.It Cm VM_NDISOES
+Number of
+.Sq iso
+s.
+.It Cm VM_ISO${n}_TYPE
+Iso device type. Where ${n} starts from 1 to VM_NISOES.
+.It Cm VM_ISO${n}_PATH
+Iso device path. Where ${n} starts from 1 to VM_NISOES.
+.It Cm VM_NNETWORKS
+Number of
+.Sq network
+s.
+.It Cm VM_NETWORK${n}_TYPE
+Network device type. Where ${n} starts from 1 to VM_NNETWORKS.
+.It Cm VM_NETWORK${n}_TAP
+Assigned tap interface name. Where ${n} starts from 1 to VM_NNETWORKS.
+.It Cm VM_NETWORK${n}_BRIDGE
+Bridge interface name. Where ${n} starts from 1 to VM_NNETWORKS.
+.It Cm VM_GRAPHICS
+.Sq true
+or
+.Sq false .
+.It Cm VM_GRAPHICS_LISTEN
+Vnc listen address. This is set if VM_GRAPHICS is
+.Sq true .
+.It Cm VM_GRAPHICS_PORT
+Vnc port number. This is set if VM_GRAPHICS is
+.Sq true .
+.It Cm VM_GRAPHICS_PASSWORD
+Vnc password. This is set if VM_GRAPHICS is
+.Sq true .
+.It Cm VM_GRAPHICS_RES
+<width> x <height>. This is set if VM_GRAPHICS is
+.Sq true .
+.It Cm VM_GRAPHICS_WAIT
+.Sq true
+or
+.Sq false.
+This is set if VM_GRAPHICS is
+.Sq true .
+.It Cm VM_XHCI_MOUSE
+.Sq true
+or
+.Sq false.
+This is set if VM_GRAPHICS is
+.Sq true .
 .El
 .Sh SEE ALSO
 .Xr bmd 8 ,
