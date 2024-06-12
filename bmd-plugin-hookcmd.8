@@ -171,9 +171,13 @@ s.
 .It Cm VM_NETWORK${n}_TYPE
 Network device type. Where ${n} starts from 1 to VM_NNETWORKS.
 .It Cm VM_NETWORK${n}_TAP
-Assigned tap interface name. Where ${n} starts from 1 to VM_NNETWORKS.
+Assigned tap interface name or
+.Xr vale 4
+port name. Where ${n} starts from 1 to VM_NNETWORKS.
 .It Cm VM_NETWORK${n}_BRIDGE
-Bridge interface name. Where ${n} starts from 1 to VM_NNETWORKS.
+Bridge interface name or
+.Xr vale 4
+swtich name. Where ${n} starts from 1 to VM_NNETWORKS.
 .It Cm VM_GRAPHICS
 .Sq true
 or
