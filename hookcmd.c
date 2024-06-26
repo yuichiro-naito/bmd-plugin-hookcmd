@@ -17,6 +17,12 @@
 #define ARRAY_FOREACH(p, a) \
 	for (p = &a[0]; p < &a[nitems(a)]; p++)
 
+struct command_conf {
+	const char *type;
+	struct vm *vm;
+	nvlist_t  *config;
+};
+
 extern PLUGIN_DESC plugin_desc;
 
 static int
@@ -41,12 +47,6 @@ hookcmd_parse_config(nvlist_t *config, const char *key, const char *val)
 
 	nvlist_add_string(config, k, val);
 	return 0;
-}
-
-static int
-on_process_exit(int id, void *data __unused)
-{
-	return waitpid(id, NULL, WNOHANG);
 }
 
 static const char * const state_name[] = {
@@ -114,58 +114,66 @@ exec_command(struct vm *vm, nvlist_t *config, const char *key, bool do_setuid)
 		}
 	}
 
+        plugin_infolog(&plugin_desc, "%s: %s: %s: %s", get_name(conf),
+                       key, state_name[get_state(vm)], cmd0);
+
 	fexecve(fd, args, environ);
 err:
 	exit(1);
 }
 
-static void
-hookcmd_status_change(struct vm *vm, nvlist_t *config)
+static int
+wait_command(int id, void *data, int *status, struct vm **vm)
 {
-	pid_t pid;
+	struct command_conf *c = data;
+	const char *type = c->type;
+	const char *name = get_name(vm_get_conf(c->vm)), *cmd0;
+	nvlist_t *config = c->config;
+	int st;
 
-	if (! nvlist_exists_string(config, "hookcmd") ||
-	    (pid = fork()) < 0)
-		return;
+        if (vm)
+		*vm = c->vm;
 
-	if (pid == 0)
-		exec_command(vm, config, "hookcmd", true);
+	free(c);
 
-	plugin_wait_for_process(pid, on_process_exit, NULL);
+        if (waitpid(id, &st, WNOHANG) < 0)
+		return -1;
+
+	cmd0 = nvlist_get_string(config, type);
+	if (WIFSIGNALED(st))
+                plugin_errlog(&plugin_desc, "%s: %s stoppped by signal %d%s",
+			      name, cmd0, WTERMSIG(st),
+			      (WCOREDUMP(st) ? " coredumped" : ""));
+	else if (WIFSTOPPED(st))
+                plugin_errlog(&plugin_desc, "%s: %s stopped by signal %d",
+			      name, cmd0, WSTOPSIG(st));
+
+	if (WIFEXITED(st) && WEXITSTATUS(st) > 0)
+                plugin_errlog(&plugin_desc, "%s: %s returned %d",
+                              name, cmd0, WEXITSTATUS(st));
+
+	if (WIFEXITED(st) && WEXITSTATUS(st) == 0)
+                plugin_infolog(&plugin_desc, "%s: %s: done", name, type);
+	if (status)
+		*status = st;
+	return 0;
 }
 
-struct prestart_conf {
-	struct vm *vm;
-	nvlist_t  *config;
-};
+static int
+on_hookcmd_exit(int id, void *data)
+{
+	int status;
+	return wait_command(id, data, &status, NULL);
+}
 
 static int
 on_prestart_exit(int id, void *data)
 {
-	struct prestart_conf *c = data;
-	struct vm *vm = c->vm;
-	nvlist_t *config = c->config;
-	const char *cmd0;
+	struct vm *vm;
 	int status;
 
-	free(c);
-
-	if (waitpid(id, &status, WNOHANG) < 0)
+        if (wait_command(id, data, &status, &vm) < 0)
 		goto err;
-
-	cmd0 = nvlist_get_string(config, "prestart");
-
-	if (WIFSIGNALED(status))
-		plugin_errlog(&plugin_desc, "%s stoppped by signal %d%s", cmd0,
-			      WTERMSIG(status),
-			      (WCOREDUMP(status) ? " coredumped" : ""));
-	else if (WIFSTOPPED(status))
-		plugin_errlog(&plugin_desc, "%s stopped by signal %d", cmd0,
-			      WSTOPSIG(status));
-
-	if (WIFEXITED(status) && WEXITSTATUS(status) > 0)
-			plugin_errlog(&plugin_desc, "%s returned %d", cmd0,
-				      WEXITSTATUS(status));
 
 	if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
 		plugin_start_virtualmachine(&plugin_desc, vm);
@@ -179,19 +187,45 @@ err:
 }
 
 static int
-hookcmd_prestart(struct vm *vm, nvlist_t *config)
+on_poststop_exit(int id, void *data)
 {
-	pid_t pid;
-	struct prestart_conf *c;
+	struct vm *vm;
+	int status;
 
-	if (! nvlist_exists_string(config, "prestart"))
-		return 0;
+        if (wait_command(id, data, &status, &vm) < 0)
+		return -1;
+	plugin_cleanup_virtualmachine(&plugin_desc, vm);
+
+	return 0;
+}
+
+static struct command_conf *
+create_command_conf(const char *type, struct vm *vm, nvlist_t *config)
+{
+	struct command_conf *c;
 
 	if ((c = malloc(sizeof(*c))) == NULL)
-		return -1;
+		return NULL;
 
+	c->type = type;
 	c->vm = vm;
 	c->config = config;
+
+	return c;
+}
+
+static int
+do_command(const char *type, struct vm *vm, nvlist_t *config, bool do_setuid,
+	   plugin_call_back cb)
+{
+	struct command_conf *c;
+	pid_t pid;
+
+        if (!nvlist_exists_string(config, type))
+		return -1;
+
+	if ((c = create_command_conf(type, vm, config)) == NULL)
+		return -1;
 
 	if ((pid = fork()) < 0) {
 		free(c);
@@ -199,39 +233,28 @@ hookcmd_prestart(struct vm *vm, nvlist_t *config)
 	}
 
 	if (pid == 0)
-		exec_command(vm, config, "prestart", false);
+		exec_command(vm, config, type, do_setuid);
 
-	plugin_wait_for_process(pid, on_prestart_exit, c);
+	plugin_wait_for_process(pid, cb, c);
 	return 1;
 }
 
-static int
-on_poststop_exit(int id, void *data)
+static void
+hookcmd_status_change(struct vm *vm, nvlist_t *config)
 {
-	struct vm *vm = data;
+	do_command("hookcmd", vm, config, true, on_hookcmd_exit);
+}
 
-	waitpid(id, NULL, WNOHANG);
-	plugin_cleanup_virtualmachine(&plugin_desc, vm);
-
-	return 0;
+static int
+hookcmd_prestart(struct vm *vm, nvlist_t *config)
+{
+	return do_command("prestart", vm, config, false, on_prestart_exit);
 }
 
 static int
 hookcmd_poststop(struct vm *vm, nvlist_t *config)
 {
-	pid_t pid;
-
-	if (! nvlist_exists_string(config, "poststop"))
-		return 0;
-
-	if ((pid = fork()) < 0)
-		return -1;
-
-	if (pid == 0)
-		exec_command(vm, config, "poststop", false);
-
-	plugin_wait_for_process(pid, on_poststop_exit, vm);
-	return 1;
+	return do_command("poststop", vm, config, false, on_poststop_exit);
 }
 
 PLUGIN_DESC plugin_desc = {
