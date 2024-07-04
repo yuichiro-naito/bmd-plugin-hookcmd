@@ -1,5 +1,9 @@
 # bmd-plugin-hookcmd
-The bmd plugin hookcmd spawns the specific command when VM's status is changed.
+The bmd plugin hookcmd spawns the specific command on the following conditions.
+
+1. Before starting a VM.
+2. After stopping a VM.
+3. A VM's state is changed.
 
 ## Configuration
 
@@ -8,7 +12,11 @@ which command is spawned.
 
 | parameter | value |
 |-----------|-------|
+| prestart  | File path to the spawn command |
+| poststop  | File path to the spawn command |
 | hookcmd   | File path to the spawn command |
+
+`prestart` command
 
 ## Command Parameter
 
@@ -22,6 +30,8 @@ command <VM name> <VM state>
 
 | VM state  | when |
 |-----------|------|
+| PRESTART  | Before VM starts. |
 | LOAD      | VM loader is invoked. |
 | RUN       | VM start running. |
+| POSTSTOP  | After VM stops. |
 | TERMINATE | VM is terminated. |
