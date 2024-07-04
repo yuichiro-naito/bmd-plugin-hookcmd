@@ -221,8 +221,11 @@ do_command(const char *type, struct vm *vm, nvlist_t *config, bool do_setuid,
 	struct command_conf *c;
 	pid_t pid;
 
+        /*
+	  If command path is not defined, do nothing not an error.
+	 */
         if (!nvlist_exists_string(config, type))
-		return -1;
+		return 0;
 
 	if ((c = create_command_conf(type, vm, config)) == NULL)
 		return -1;
