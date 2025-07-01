@@ -16,7 +16,13 @@ which command is spawned.
 | poststop  | File path to the spawn command |
 | hookcmd   | File path to the spawn command |
 
-`prestart` command
+`prestart` command is spawned before starting a VM. The VM will start after
+`prestart` command exits sucessfully. If `prestart` command exits with
+non-zero value, the VM won't start.
+
+`poststop` command is spawned after stopping a VM.
+
+`hookcmd` command is spawned when a VM state is changed.
 
 ## Command Parameter
 
