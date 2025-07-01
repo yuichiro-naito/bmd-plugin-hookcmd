@@ -1,0 +1,6 @@
+.depend*
+*.o
+*.pico
+bmd-plugin-hookcmd.8.gz
+libbmdplugin_hookcmd.so
+libbmdplugin_hookcmd.so.1
