@@ -1,26 +1,24 @@
-#include <sys/limits.h>
 #include <sys/param.h>
+#include <sys/limits.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 
+#include <bmd_plugin.h>
 #include <fcntl.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
 #include <libgen.h>
 #include <pwd.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
-#include <bmd_plugin.h>
+#define GID_NOBODY	    65534
 
-#define GID_NOBODY   65534
-
-#define ARRAY_FOREACH(p, a) \
-	for (p = &a[0]; p < &a[nitems(a)]; p++)
+#define ARRAY_FOREACH(p, a) for (p = &a[0]; p < &a[nitems(a)]; p++)
 
 struct command_conf {
 	const char *type;
 	struct vm *vm;
-	nvlist_t  *config;
+	nvlist_t *config;
 };
 
 extern PLUGIN_DESC plugin_desc;
@@ -30,10 +28,10 @@ hookcmd_parse_config(nvlist_t *config, const char *key, const char *val)
 {
 	const char *k = NULL;
 	const char *const *p;
-	static const char *const keys[] = { "prestart","hookcmd", "poststop" };
+	static const char *const keys[] = { "prestart", "hookcmd", "poststop" };
 	struct stat sb;
 
-	ARRAY_FOREACH (p, keys)
+	ARRAY_FOREACH(p, keys)
 		if (strcasecmp(key, *p) == 0) {
 			k = *p;
 			break;
@@ -49,10 +47,8 @@ hookcmd_parse_config(nvlist_t *config, const char *key, const char *val)
 	return 0;
 }
 
-static const char * const state_name[] = {
-	"TERMINATE", "LOAD", "RUN",
-	"STOP", "REMOVE", "RESTART", "PRESTART", "POSTSTOP"
-};
+static const char *const state_name[] = { "TERMINATE", "LOAD", "RUN", "STOP",
+	"REMOVE", "RESTART", "PRESTART", "POSTSTOP" };
 
 static void
 exec_command(struct vm *vm, nvlist_t *config, const char *key, bool do_setuid)
@@ -64,7 +60,7 @@ exec_command(struct vm *vm, nvlist_t *config, const char *key, bool do_setuid)
 	const char *cmd0;
 	char *cmd1, *cmd2;
 	FILE *fp;
-	char  **args, *buf;
+	char **args, *buf;
 	size_t len;
 	struct vm_conf *conf = vm_get_conf(vm);
 	extern char **environ;
@@ -79,7 +75,7 @@ exec_command(struct vm *vm, nvlist_t *config, const char *key, bool do_setuid)
 	if (fp == NULL)
 		exit(1);
 	fprintf(fp, "%s\n%s\n%s\n", cmd2, get_name(conf),
-		state_name[get_state(vm)]);
+	    state_name[get_state(vm)]);
 
 	fclose(fp);
 
@@ -91,8 +87,8 @@ exec_command(struct vm *vm, nvlist_t *config, const char *key, bool do_setuid)
 
 	if (do_setuid && (user = get_owner(conf)) > 0) {
 		if ((group = get_group(conf)) == UINT_MAX)
-			group = (pwd = getpwuid(user)) ?
-				pwd->pw_gid : GID_NOBODY;
+			group = (pwd = getpwuid(user)) ? pwd->pw_gid :
+							 GID_NOBODY;
 		setgid(group);
 		setuid(user);
 	}
@@ -102,20 +98,20 @@ exec_command(struct vm *vm, nvlist_t *config, const char *key, bool do_setuid)
 		goto err;
 	}
 
-	if (! do_setuid) {
+	if (!do_setuid) {
 		if (fstat(fd, &st) < 0) {
 			plugin_errlog(&plugin_desc, "failed to stat %s", cmd0);
 			goto err;
 		}
 		if (st.st_uid != 0) {
 			plugin_errlog(&plugin_desc, "'%s' is not owned by root",
-				       cmd0);
+			    cmd0);
 			goto err;
 		}
 	}
 
-        plugin_infolog(&plugin_desc, "%s: %s: %s: %s", get_name(conf),
-                       key, state_name[get_state(vm)], cmd0);
+	plugin_infolog(&plugin_desc, "%s: %s: %s: %s", get_name(conf), key,
+	    state_name[get_state(vm)], cmd0);
 
 	fexecve(fd, args, environ);
 err:
@@ -131,29 +127,29 @@ wait_command(int id, void *data, int *status, struct vm **vm)
 	nvlist_t *config = c->config;
 	int st;
 
-        if (vm)
+	if (vm)
 		*vm = c->vm;
 
 	free(c);
 
-        if (waitpid(id, &st, WNOHANG) < 0)
+	if (waitpid(id, &st, WNOHANG) < 0)
 		return -1;
 
 	cmd0 = nvlist_get_string(config, type);
 	if (WIFSIGNALED(st))
-                plugin_errlog(&plugin_desc, "%s: %s stoppped by signal %d%s",
-			      name, cmd0, WTERMSIG(st),
-			      (WCOREDUMP(st) ? " coredumped" : ""));
+		plugin_errlog(&plugin_desc, "%s: %s stoppped by signal %d%s",
+		    name, cmd0, WTERMSIG(st),
+		    (WCOREDUMP(st) ? " coredumped" : ""));
 	else if (WIFSTOPPED(st))
-                plugin_errlog(&plugin_desc, "%s: %s stopped by signal %d",
-			      name, cmd0, WSTOPSIG(st));
+		plugin_errlog(&plugin_desc, "%s: %s stopped by signal %d", name,
+		    cmd0, WSTOPSIG(st));
 
 	if (WIFEXITED(st) && WEXITSTATUS(st) > 0)
-                plugin_errlog(&plugin_desc, "%s: %s returned %d",
-                              name, cmd0, WEXITSTATUS(st));
+		plugin_errlog(&plugin_desc, "%s: %s returned %d", name, cmd0,
+		    WEXITSTATUS(st));
 
 	if (WIFEXITED(st) && WEXITSTATUS(st) == 0)
-                plugin_infolog(&plugin_desc, "%s: %s: done", name, type);
+		plugin_infolog(&plugin_desc, "%s: %s: done", name, type);
 	if (status)
 		*status = st;
 	return 0;
@@ -172,7 +168,7 @@ on_prestart_exit(int id, void *data)
 	struct vm *vm;
 	int status;
 
-        if (wait_command(id, data, &status, &vm) < 0)
+	if (wait_command(id, data, &status, &vm) < 0)
 		goto err;
 
 	if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
@@ -192,7 +188,7 @@ on_poststop_exit(int id, void *data)
 	struct vm *vm;
 	int status;
 
-        if (wait_command(id, data, &status, &vm) < 0)
+	if (wait_command(id, data, &status, &vm) < 0)
 		return -1;
 	plugin_cleanup_virtualmachine(&plugin_desc, vm);
 
@@ -216,15 +212,15 @@ create_command_conf(const char *type, struct vm *vm, nvlist_t *config)
 
 static int
 do_command(const char *type, struct vm *vm, nvlist_t *config, bool do_setuid,
-	   plugin_call_back cb)
+    plugin_call_back cb)
 {
 	struct command_conf *c;
 	pid_t pid;
 
-        /*
+	/*
 	  If command path is not defined, do nothing not an error.
 	 */
-        if (!nvlist_exists_string(config, type))
+	if (!nvlist_exists_string(config, type))
 		return 0;
 
 	if ((c = create_command_conf(type, vm, config)) == NULL)
